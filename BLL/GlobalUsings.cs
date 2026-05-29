@@ -1,0 +1,9 @@
+global using BLL.Common;
+global using BLL.DTOs;
+global using BLL.Exceptions;
+global using BLL.Helpers;
+global using BLL.Interfaces;
+global using BLL.Mappers;
+global using BLL.Services;
+global using DAL.Entities;
+global using DAL.Interfaces;
