@@ -1,0 +1,9 @@
+global using Xunit;
+global using Moq;
+global using FluentAssertions;
+global using BLL.DTOs;
+global using BLL.Exceptions;
+global using BLL.Interfaces;
+global using BLL.Services;
+global using DAL.Entities;
+global using DAL.Interfaces;
