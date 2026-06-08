@@ -14,9 +14,12 @@ public interface IVacancyService
         CreateVacancyDto dto, CancellationToken cancellationToken = default);
 
     Task<OperationResult<VacancyDto>> UpdateAsync(
-        int id, UpdateVacancyDto dto, CancellationToken cancellationToken = default);
+        int id, UpdateVacancyDto dto, int userId, CancellationToken cancellationToken = default);
 
-    Task DeleteAsync(int id, CancellationToken cancellationToken = default);
+    Task<OperationResult<VacancyDto>> PatchAsync(
+        int id, PatchVacancyDto dto, int userId, CancellationToken cancellationToken = default);
+
+    Task DeleteAsync(int id, int userId, CancellationToken cancellationToken = default);
 
     Task<IReadOnlyList<ResumeDto>> FindMatchingResumesAsync(
         int vacancyId, CancellationToken cancellationToken = default);

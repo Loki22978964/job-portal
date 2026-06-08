@@ -73,7 +73,7 @@ public sealed class VacancyService : IVacancyService
     }
 
     public async Task<OperationResult<VacancyDto>> UpdateAsync(
-        int id, UpdateVacancyDto dto, CancellationToken cancellationToken = default)
+        int id, UpdateVacancyDto dto, int userId, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(dto);
         ValidateUpdate(dto);
@@ -82,6 +82,14 @@ public sealed class VacancyService : IVacancyService
             .GetByIdWithDetailsAsync(id, cancellationToken)
             .ConfigureAwait(false)
             ?? throw new EntityNotFoundException(nameof(Vacancy), id);
+
+        var currentUser = await _unitOfWork.Users
+            .GetByIdWithRoleAsync(userId, cancellationToken)
+            .ConfigureAwait(false)
+            ?? throw new EntityNotFoundException(nameof(User), userId);
+
+        if (vacancy.UserId != userId && currentUser.Role?.Name != KnownRoles.Administrator)
+            throw new AuthorizationException("You can only update your own vacancies.");
 
         VacancyMapper.UpdateEntity(vacancy, dto);
         vacancy.UpdatedAt = DateTime.UtcNow;
@@ -92,12 +100,47 @@ public sealed class VacancyService : IVacancyService
         return OperationResult.Success(VacancyMapper.ToDto(vacancy));
     }
 
-    public async Task DeleteAsync(int id, CancellationToken cancellationToken = default)
+    public async Task<OperationResult<VacancyDto>> PatchAsync(
+        int id, PatchVacancyDto dto, int userId, CancellationToken cancellationToken = default)
     {
-        _ = await _unitOfWork.Vacancies
+        ArgumentNullException.ThrowIfNull(dto);
+
+        var vacancy = await _unitOfWork.Vacancies
+            .GetByIdWithDetailsAsync(id, cancellationToken)
+            .ConfigureAwait(false)
+            ?? throw new EntityNotFoundException(nameof(Vacancy), id);
+
+        var currentUser = await _unitOfWork.Users
+            .GetByIdWithRoleAsync(userId, cancellationToken)
+            .ConfigureAwait(false)
+            ?? throw new EntityNotFoundException(nameof(User), userId);
+
+        if (vacancy.UserId != userId && currentUser.Role?.Name != KnownRoles.Administrator)
+            throw new AuthorizationException("You can only patch your own vacancies.");
+
+        VacancyMapper.PatchEntity(vacancy, dto);
+        vacancy.UpdatedAt = DateTime.UtcNow;
+
+        _unitOfWork.Vacancies.Update(vacancy);
+        await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+
+        return OperationResult.Success(VacancyMapper.ToDto(vacancy));
+    }
+
+    public async Task DeleteAsync(int id, int userId, CancellationToken cancellationToken = default)
+    {
+        var vacancy = await _unitOfWork.Vacancies
             .GetByIdAsync(id, cancellationToken)
             .ConfigureAwait(false)
             ?? throw new EntityNotFoundException(nameof(Vacancy), id);
+
+        var currentUser = await _unitOfWork.Users
+            .GetByIdWithRoleAsync(userId, cancellationToken)
+            .ConfigureAwait(false)
+            ?? throw new EntityNotFoundException(nameof(User), userId);
+
+        if (vacancy.UserId != userId && currentUser.Role?.Name != KnownRoles.Administrator)
+            throw new AuthorizationException("You can only delete your own vacancies.");
 
         var applications = await _unitOfWork.Applications
             .GetByVacancyIdAsync(id, cancellationToken)

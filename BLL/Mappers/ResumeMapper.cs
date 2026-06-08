@@ -47,4 +47,15 @@ public static class ResumeMapper
         entity.Skills = dto.Skills;
         entity.ExpectedSalary = dto.ExpectedSalary;
     }
+
+    public static void PatchEntity(Resume entity, PatchResumeDto dto)
+    {
+        ArgumentNullException.ThrowIfNull(entity);
+        ArgumentNullException.ThrowIfNull(dto);
+
+        if (dto.Title != null)           entity.Title = dto.Title;
+        if (dto.Description != null)     entity.Description = dto.Description;
+        if (dto.Skills != null)          entity.Skills = dto.Skills;
+        if (dto.ExpectedSalary.HasValue) entity.ExpectedSalary = dto.ExpectedSalary.Value;
+    }
 }

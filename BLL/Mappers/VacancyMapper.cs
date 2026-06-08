@@ -50,4 +50,16 @@ public static class VacancyMapper
         entity.RequiredSkills = dto.RequiredSkills;
         entity.Salary = dto.Salary;
     }
+
+    public static void PatchEntity(Vacancy entity, PatchVacancyDto dto)
+    {
+        ArgumentNullException.ThrowIfNull(entity);
+        ArgumentNullException.ThrowIfNull(dto);
+
+        if (dto.Title != null)          entity.Title = dto.Title;
+        if (dto.Description != null)    entity.Description = dto.Description;
+        if (dto.Company != null)        entity.Company = dto.Company;
+        if (dto.RequiredSkills != null) entity.RequiredSkills = dto.RequiredSkills;
+        if (dto.Salary.HasValue)        entity.Salary = dto.Salary.Value;
+    }
 }

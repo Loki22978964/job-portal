@@ -44,20 +44,21 @@ public sealed class VacanciesController : ApiControllerBase
             VacancyMapper.ToViewModel(result.Data));
     }
 
-    [HttpPut("{id:int}")]
+    [HttpPatch("{id:int}")]
     [Authorize(Roles = "Employer,Administrator")]
-    public async Task<IActionResult> Update(
-        int id, [FromBody] UpdateVacancyRequest request, CancellationToken cancellationToken)
+    public async Task<IActionResult> Patch(
+        int id, [FromBody] PatchVacancyRequest request, CancellationToken cancellationToken)
     {
-        var dto    = VacancyMapper.ToUpdateDto(request);
-        var result = await _vacancyService.UpdateAsync(id, dto, cancellationToken);
+        var dto    = VacancyMapper.ToPatchDto(request);
+        var result = await _vacancyService.PatchAsync(id, dto, GetCurrentUserId(), cancellationToken);
         return Ok(VacancyMapper.ToViewModel(result.Data!));
     }
 
     [HttpDelete("{id:int}")]
+    [Authorize(Roles = "Employer,Administrator")]
     public async Task<IActionResult> Delete(int id, CancellationToken cancellationToken)
     {
-        await _vacancyService.DeleteAsync(id, cancellationToken);
+        await _vacancyService.DeleteAsync(id, GetCurrentUserId(), cancellationToken);
         return NoContent();
     }
 

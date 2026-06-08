@@ -30,6 +30,13 @@ public static class VacancyMapper
             request.RequiredSkills,
             request.Salary);
 
+    public static PatchVacancyDto ToPatchDto(PatchVacancyRequest request) =>
+        new(request.Title,
+            request.Description,
+            request.Company,
+            request.RequiredSkills,
+            request.Salary);
+
     public static VacancyFilterDto ToFilterDto(VacancyFilterRequest request) =>
         new(request.Keyword,
             request.SortBy,

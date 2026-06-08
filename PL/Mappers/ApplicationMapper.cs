@@ -15,7 +15,4 @@ public static class ApplicationMapper
 
     public static ApplyDto ToApplyDto(ApplyRequest request, int userId) =>
         new(request.ResumeId, request.VacancyId, userId);
-
-    public static ProposeDto ToProposeDto(ProposeRequest request, int userId) =>
-        new(request.VacancyId, request.ResumeId, userId);
 }

@@ -72,7 +72,7 @@ public sealed class ResumeService : IResumeService
     }
 
     public async Task<OperationResult<ResumeDto>> UpdateAsync(
-        int id, UpdateResumeDto dto, CancellationToken cancellationToken = default)
+        int id, UpdateResumeDto dto, int userId, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(dto);
         ValidateUpdate(dto);
@@ -81,6 +81,14 @@ public sealed class ResumeService : IResumeService
             .GetByIdWithDetailsAsync(id, cancellationToken)
             .ConfigureAwait(false)
             ?? throw new EntityNotFoundException(nameof(Resume), id);
+
+        var currentUser = await _unitOfWork.Users
+            .GetByIdWithRoleAsync(userId, cancellationToken)
+            .ConfigureAwait(false)
+            ?? throw new EntityNotFoundException(nameof(User), userId);
+
+        if (resume.UserId != userId && currentUser.Role?.Name != KnownRoles.Administrator)
+            throw new AuthorizationException("You can only update your own resumes.");
 
         ResumeMapper.UpdateEntity(resume, dto);
         resume.UpdatedAt = DateTime.UtcNow;
@@ -91,12 +99,47 @@ public sealed class ResumeService : IResumeService
         return OperationResult.Success(ResumeMapper.ToDto(resume));
     }
 
-    public async Task DeleteAsync(int id, CancellationToken cancellationToken = default)
+    public async Task<OperationResult<ResumeDto>> PatchAsync(
+        int id, PatchResumeDto dto, int userId, CancellationToken cancellationToken = default)
     {
-        _ = await _unitOfWork.Resumes
+        ArgumentNullException.ThrowIfNull(dto);
+
+        var resume = await _unitOfWork.Resumes
+            .GetByIdWithDetailsAsync(id, cancellationToken)
+            .ConfigureAwait(false)
+            ?? throw new EntityNotFoundException(nameof(Resume), id);
+
+        var currentUser = await _unitOfWork.Users
+            .GetByIdWithRoleAsync(userId, cancellationToken)
+            .ConfigureAwait(false)
+            ?? throw new EntityNotFoundException(nameof(User), userId);
+
+        if (resume.UserId != userId && currentUser.Role?.Name != KnownRoles.Administrator)
+            throw new AuthorizationException("You can only patch your own resumes.");
+
+        ResumeMapper.PatchEntity(resume, dto);
+        resume.UpdatedAt = DateTime.UtcNow;
+
+        _unitOfWork.Resumes.Update(resume);
+        await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+
+        return OperationResult.Success(ResumeMapper.ToDto(resume));
+    }
+
+    public async Task DeleteAsync(int id, int userId, CancellationToken cancellationToken = default)
+    {
+        var resume = await _unitOfWork.Resumes
             .GetByIdAsync(id, cancellationToken)
             .ConfigureAwait(false)
             ?? throw new EntityNotFoundException(nameof(Resume), id);
+
+        var currentUser = await _unitOfWork.Users
+            .GetByIdWithRoleAsync(userId, cancellationToken)
+            .ConfigureAwait(false)
+            ?? throw new EntityNotFoundException(nameof(User), userId);
+
+        if (resume.UserId != userId && currentUser.Role?.Name != KnownRoles.Administrator)
+            throw new AuthorizationException("You can only delete your own resumes.");
 
         await _unitOfWork.Resumes.DeleteAsync(id, cancellationToken).ConfigureAwait(false);
         await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);

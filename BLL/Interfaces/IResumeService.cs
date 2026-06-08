@@ -14,9 +14,12 @@ public interface IResumeService
         CreateResumeDto dto, CancellationToken cancellationToken = default);
 
     Task<OperationResult<ResumeDto>> UpdateAsync(
-        int id, UpdateResumeDto dto, CancellationToken cancellationToken = default);
+        int id, UpdateResumeDto dto, int userId, CancellationToken cancellationToken = default);
 
-    Task DeleteAsync(int id, CancellationToken cancellationToken = default);
+    Task<OperationResult<ResumeDto>> PatchAsync(
+        int id, PatchResumeDto dto, int userId, CancellationToken cancellationToken = default);
+
+    Task DeleteAsync(int id, int userId, CancellationToken cancellationToken = default);
 
     Task<IReadOnlyList<VacancyDto>> FindMatchingVacanciesAsync(
         int resumeId, CancellationToken cancellationToken = default);

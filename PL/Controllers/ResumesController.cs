@@ -44,20 +44,21 @@ public sealed class ResumesController : ApiControllerBase
             ResumeMapper.ToViewModel(result.Data));
     }
 
-    [HttpPut("{id:int}")]
+    [HttpPatch("{id:int}")]
     [Authorize(Roles = "Employee,Administrator")]
-    public async Task<IActionResult> Update(
-        int id, [FromBody] UpdateResumeRequest request, CancellationToken cancellationToken)
+    public async Task<IActionResult> Patch(
+        int id, [FromBody] PatchResumeRequest request, CancellationToken cancellationToken)
     {
-        var dto    = ResumeMapper.ToUpdateDto(request);
-        var result = await _resumeService.UpdateAsync(id, dto, cancellationToken);
+        var dto    = ResumeMapper.ToPatchDto(request);
+        var result = await _resumeService.PatchAsync(id, dto, GetCurrentUserId(), cancellationToken);
         return Ok(ResumeMapper.ToViewModel(result.Data!));
     }
 
     [HttpDelete("{id:int}")]
+    [Authorize(Roles = "Employee,Administrator")]
     public async Task<IActionResult> Delete(int id, CancellationToken cancellationToken)
     {
-        await _resumeService.DeleteAsync(id, cancellationToken);
+        await _resumeService.DeleteAsync(id, GetCurrentUserId(), cancellationToken);
         return NoContent();
     }
 

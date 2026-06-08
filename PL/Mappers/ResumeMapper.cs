@@ -27,6 +27,12 @@ public static class ResumeMapper
             request.Skills,
             request.ExpectedSalary);
 
+    public static PatchResumeDto ToPatchDto(PatchResumeRequest request) =>
+        new(request.Title,
+            request.Description,
+            request.Skills,
+            request.ExpectedSalary);
+
     public static ResumeFilterDto ToFilterDto(ResumeFilterRequest request) =>
         new(request.Keyword,
             request.SortBy,

@@ -374,11 +374,15 @@ public sealed class VacancyServiceTests
     public async Task UpdateAsync_ExistingVacancy_ReturnsUpdatedFields()
     {
         
+        var vacancy = MakeVacancy(5);
         _vacancyRepo.Setup(r => r.GetByIdWithDetailsAsync(5, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(MakeVacancy(5));
+            .ReturnsAsync(vacancy);
+        _userRepo.Setup(r => r.GetByIdWithRoleAsync(vacancy.UserId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(vacancy.User);
+        
         var dto = ValidUpdateDto();
 
-        var result = await _sut.UpdateAsync(5, dto);
+        var result = await _sut.UpdateAsync(5, dto, vacancy.UserId);
 
         result.IsSuccess.Should().BeTrue();
         result.Data!.Title.Should().Be(dto.Title);
@@ -389,7 +393,7 @@ public sealed class VacancyServiceTests
     public async Task UpdateAsync_NullDto_ThrowsArgumentNullException()
     {
         
-        var act = () => _sut.UpdateAsync(1, null!);
+        var act = () => _sut.UpdateAsync(1, null!, 10);
 
         await act.Should().ThrowAsync<ArgumentNullException>();
     }
@@ -401,7 +405,7 @@ public sealed class VacancyServiceTests
         _vacancyRepo.Setup(r => r.GetByIdWithDetailsAsync(77, It.IsAny<CancellationToken>()))
             .ReturnsAsync((Vacancy?)null);
 
-        var act = () => _sut.UpdateAsync(77, ValidUpdateDto());
+        var act = () => _sut.UpdateAsync(77, ValidUpdateDto(), 10);
 
         await act.Should().ThrowAsync<EntityNotFoundException>();
     }
@@ -412,7 +416,7 @@ public sealed class VacancyServiceTests
         
         var dto = new UpdateVacancyDto("", "Desc", "Corp", "C#", 1_000m);
 
-        var act = () => _sut.UpdateAsync(1, dto);
+        var act = () => _sut.UpdateAsync(1, dto, 10);
 
         await act.Should().ThrowAsync<ValidationException>()
             .WithMessage("*title*");
@@ -424,7 +428,7 @@ public sealed class VacancyServiceTests
         
         var dto = new UpdateVacancyDto("Title", "Desc", "Corp", "C#", -100m);
 
-        var act = () => _sut.UpdateAsync(1, dto);
+        var act = () => _sut.UpdateAsync(1, dto, 10);
 
         await act.Should().ThrowAsync<ValidationException>()
             .WithMessage("*non-negative*");
@@ -434,12 +438,15 @@ public sealed class VacancyServiceTests
     public async Task DeleteAsync_ExistingVacancyWithNoApplications_DeletesVacancy()
     {
         
+        var vacancy = MakeVacancy(5);
         _vacancyRepo.Setup(r => r.GetByIdAsync(5, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(MakeVacancy(5));
+            .ReturnsAsync(vacancy);
+        _userRepo.Setup(r => r.GetByIdWithRoleAsync(vacancy.UserId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(vacancy.User);
         _applicationRepo.Setup(r => r.GetByVacancyIdAsync(5, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new List<Application>());
 
-        await _sut.DeleteAsync(5);
+        await _sut.DeleteAsync(5, vacancy.UserId);
 
         _vacancyRepo.Verify(r => r.DeleteAsync(5, It.IsAny<CancellationToken>()), Times.Once);
         _uow.Verify(u => u.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
@@ -454,12 +461,15 @@ public sealed class VacancyServiceTests
             new() { Id = 101, VacancyId = 5, ResumeId = 1 },
             new() { Id = 102, VacancyId = 5, ResumeId = 2 },
         };
+        var vacancy = MakeVacancy(5);
         _vacancyRepo.Setup(r => r.GetByIdAsync(5, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(MakeVacancy(5));
+            .ReturnsAsync(vacancy);
+        _userRepo.Setup(r => r.GetByIdWithRoleAsync(vacancy.UserId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(vacancy.User);
         _applicationRepo.Setup(r => r.GetByVacancyIdAsync(5, It.IsAny<CancellationToken>()))
             .ReturnsAsync(applications);
 
-        await _sut.DeleteAsync(5);
+        await _sut.DeleteAsync(5, vacancy.UserId);
 
         _applicationRepo.Verify(r => r.DeleteAsync(101, It.IsAny<CancellationToken>()), Times.Once);
         _applicationRepo.Verify(r => r.DeleteAsync(102, It.IsAny<CancellationToken>()), Times.Once);
@@ -473,7 +483,7 @@ public sealed class VacancyServiceTests
         _vacancyRepo.Setup(r => r.GetByIdAsync(99, It.IsAny<CancellationToken>()))
             .ReturnsAsync((Vacancy?)null);
 
-        var act = () => _sut.DeleteAsync(99);
+        var act = () => _sut.DeleteAsync(99, 10);
 
         await act.Should().ThrowAsync<EntityNotFoundException>();
     }
