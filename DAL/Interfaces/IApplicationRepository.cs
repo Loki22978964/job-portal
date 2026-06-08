@@ -7,5 +7,7 @@ public interface IApplicationRepository : IRepository<Application>
 
     Task<IReadOnlyList<Application>> GetByVacancyIdAsync(int vacancyId, CancellationToken cancellationToken = default);
 
+    Task<Application?> GetByIdWithDetailsAsync(int id, CancellationToken cancellationToken = default);
+
     Task<bool> ExistsAsync(int resumeId, int vacancyId, CancellationToken cancellationToken = default);
 }

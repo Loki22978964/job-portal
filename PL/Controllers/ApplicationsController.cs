@@ -25,6 +25,32 @@ public sealed class ApplicationsController : ApiControllerBase
         return Ok(ApplicationMapper.ToViewModel(result.Data!));
     }
 
+    [HttpPost("propose")]
+    [Authorize(Roles = "Employer,Administrator")]
+    public async Task<IActionResult> Propose(
+        [FromBody] ProposeRequest request, CancellationToken cancellationToken)
+    {
+        var dto    = ApplicationMapper.ToProposeDto(request, GetCurrentUserId());
+        var result = await _applicationService.ProposeAsync(dto, cancellationToken);
+        return Ok(ApplicationMapper.ToViewModel(result.Data!));
+    }
+
+    [HttpPost("{id:int}/accept")]
+    [Authorize(Roles = "Employee,Employer,Administrator")]
+    public async Task<IActionResult> Accept(int id, CancellationToken cancellationToken)
+    {
+        var result = await _applicationService.AcceptAsync(id, GetCurrentUserId(), cancellationToken);
+        return Ok(ApplicationMapper.ToViewModel(result.Data!));
+    }
+
+    [HttpPost("{id:int}/reject")]
+    [Authorize(Roles = "Employee,Employer,Administrator")]
+    public async Task<IActionResult> Reject(int id, CancellationToken cancellationToken)
+    {
+        var result = await _applicationService.RejectAsync(id, GetCurrentUserId(), cancellationToken);
+        return Ok(ApplicationMapper.ToViewModel(result.Data!));
+    }
+
     [HttpGet("resume/{id:int}")]
     public async Task<IActionResult> GetLinkedVacancies(int id, CancellationToken cancellationToken)
     {

@@ -9,6 +9,7 @@ public sealed class ApplicationServiceTests
     private readonly Mock<IUnitOfWork>            _uow             = new();
     private readonly Mock<IResumeRepository>      _resumeRepo      = new();
     private readonly Mock<IVacancyRepository>     _vacancyRepo     = new();
+    private readonly Mock<IUserRepository>        _userRepo        = new();
     private readonly Mock<IApplicationRepository> _applicationRepo = new();
     private readonly ApplicationService           _sut;
 
@@ -16,6 +17,7 @@ public sealed class ApplicationServiceTests
     {
         _uow.Setup(u => u.Resumes).Returns(_resumeRepo.Object);
         _uow.Setup(u => u.Vacancies).Returns(_vacancyRepo.Object);
+        _uow.Setup(u => u.Users).Returns(_userRepo.Object);
         _uow.Setup(u => u.Applications).Returns(_applicationRepo.Object);
         _uow.Setup(u => u.SaveChangesAsync(It.IsAny<CancellationToken>())).ReturnsAsync(1);
 
@@ -25,10 +27,10 @@ public sealed class ApplicationServiceTests
         _sut = new ApplicationService(_uow.Object);
     }
 
-    private static User SampleUser(int id) => new()
+    private static User SampleUser(int id, int roleId = 3) => new()
     {
         Id = id, FirstName = $"User{id}", LastName = "Test", Email = $"user{id}@test.com",
-        Role = new Role { Id = 3, Name = "Employee" }, RoleId = 3,
+        Role = new Role { Id = roleId, Name = roleId == 1 ? "Administrator" : roleId == 2 ? "Employer" : "Employee" }, RoleId = roleId,
     };
 
     private static Resume MakeResume(int id, int userId = 10) => new()
@@ -44,17 +46,18 @@ public sealed class ApplicationServiceTests
         Id = id, Title = $"Vacancy {id}", Description = "Desc",
         Company = "Corp", RequiredSkills = "C#", Salary = 4_000m,
         CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow,
-        UserId = userId, User = SampleUser(userId),
+        UserId = userId, User = SampleUser(userId, 2),
     };
 
     private static Application MakeApplication(int id, int resumeId, int vacancyId,
-        ApplicationType type = ApplicationType.Apply) => new()
+        ApplicationType type = ApplicationType.Apply,
+        ApplicationStatus status = ApplicationStatus.Pending) => new()
     {
         Id        = id,
         ResumeId  = resumeId,
         VacancyId = vacancyId,
         Type      = type,
-        Status    = ApplicationStatus.Pending,
+        Status    = status,
         AppliedAt = DateTime.UtcNow,
         Resume    = MakeResume(resumeId),
         Vacancy   = MakeVacancy(vacancyId),
@@ -74,7 +77,7 @@ public sealed class ApplicationServiceTests
             .ReturnsAsync(vacancy);
         _applicationRepo.Setup(r => r.ExistsAsync(1, 2, It.IsAny<CancellationToken>()))
             .ReturnsAsync(false);
-        _applicationRepo.Setup(r => r.GetByIdAsync(It.IsAny<int>(), It.IsAny<CancellationToken>()))
+        _applicationRepo.Setup(r => r.GetByIdWithDetailsAsync(It.IsAny<int>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(created);
 
         var dto = new ApplyDto(ResumeId: 1, VacancyId: 2, ApplicantUserId: 10);
@@ -156,6 +159,94 @@ public sealed class ApplicationServiceTests
         var act = () => _sut.ApplyAsync(dto);
 
         await act.Should().ThrowAsync<DuplicateEntityException>();
+    }
+
+    [Fact]
+    public async Task ProposeAsync_ValidRequest_CreatesApplicationAndReturnsDto()
+    {
+        
+        var resume  = MakeResume(1, userId: 10);
+        var vacancy = MakeVacancy(2, userId: 20);
+        var created = MakeApplication(99, resumeId: 1, vacancyId: 2, type: ApplicationType.Propose);
+
+        _resumeRepo.Setup(r => r.GetByIdAsync(1, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(resume);
+        _vacancyRepo.Setup(r => r.GetByIdAsync(2, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(vacancy);
+        _applicationRepo.Setup(r => r.ExistsAsync(1, 2, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(false);
+        _applicationRepo.Setup(r => r.GetByIdWithDetailsAsync(It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(created);
+
+        var dto = new ProposeDto(VacancyId: 2, ResumeId: 1, ProposerUserId: 20);
+
+        var result = await _sut.ProposeAsync(dto);
+
+        result.IsSuccess.Should().BeTrue();
+        result.Data!.Type.Should().Be(ApplicationType.Propose.ToString());
+    }
+
+    [Fact]
+    public async Task ProposeAsync_VacancyBelongsToDifferentUser_ThrowsAuthorizationException()
+    {
+        
+        _vacancyRepo.Setup(r => r.GetByIdAsync(2, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(MakeVacancy(2, userId: 20));
+
+        var dto = new ProposeDto(VacancyId: 2, ResumeId: 1, ProposerUserId: 99);
+
+        var act = () => _sut.ProposeAsync(dto);
+
+        await act.Should().ThrowAsync<AuthorizationException>();
+    }
+
+    [Fact]
+    public async Task AcceptAsync_ByAuthorizedUser_SetsStatusToAccepted()
+    {
+        
+        var app = MakeApplication(99, 1, 2, type: ApplicationType.Propose);
+        _applicationRepo.Setup(r => r.GetByIdWithDetailsAsync(99, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(app);
+        _userRepo.Setup(r => r.GetByIdWithRoleAsync(10, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(SampleUser(10)); // Employee, owner of resume
+
+        var result = await _sut.AcceptAsync(99, 10);
+
+        result.IsSuccess.Should().BeTrue();
+        result.Data!.Status.Should().Be(ApplicationStatus.Accepted.ToString());
+        app.Status.Should().Be(ApplicationStatus.Accepted);
+    }
+
+    [Fact]
+    public async Task AcceptAsync_ByUnauthorizedUser_ThrowsAuthorizationException()
+    {
+        
+        var app = MakeApplication(99, 1, 2, type: ApplicationType.Propose);
+        _applicationRepo.Setup(r => r.GetByIdWithDetailsAsync(99, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(app);
+        _userRepo.Setup(r => r.GetByIdWithRoleAsync(99, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(SampleUser(99));
+
+        var act = () => _sut.AcceptAsync(99, 99);
+
+        await act.Should().ThrowAsync<AuthorizationException>();
+    }
+
+    [Fact]
+    public async Task RejectAsync_ByAuthorizedUser_SetsStatusToRejected()
+    {
+        
+        var app = MakeApplication(99, 1, 2, type: ApplicationType.Apply);
+        _applicationRepo.Setup(r => r.GetByIdWithDetailsAsync(99, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(app);
+        _userRepo.Setup(r => r.GetByIdWithRoleAsync(20, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(SampleUser(20, 2)); // Employer, owner of vacancy
+
+        var result = await _sut.RejectAsync(99, 20);
+
+        result.IsSuccess.Should().BeTrue();
+        result.Data!.Status.Should().Be(ApplicationStatus.Rejected.ToString());
+        app.Status.Should().Be(ApplicationStatus.Rejected);
     }
 
     [Fact]

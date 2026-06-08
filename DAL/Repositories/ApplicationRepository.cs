@@ -26,6 +26,14 @@ public sealed class ApplicationRepository : Repository<Application>, IApplicatio
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
 
+    public async Task<Application?> GetByIdWithDetailsAsync(
+        int id, CancellationToken cancellationToken = default) =>
+        await _context.Applications
+            .Include(a => a.Resume)
+            .Include(a => a.Vacancy)
+            .FirstOrDefaultAsync(a => a.Id == id, cancellationToken)
+            .ConfigureAwait(false);
+
     public async Task<bool> ExistsAsync(
         int resumeId, int vacancyId, CancellationToken cancellationToken = default) =>
         await _context.Applications
