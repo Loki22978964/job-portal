@@ -542,3 +542,256 @@ All configuration lives in `PL/appsettings.json`.
 # Example: run in production mode
 ASPNETCORE_ENVIRONMENT=Production dotnet run --project PL
 ```
+
+Use Case Diagram
+```mermaid
+flowchart TD
+    Guest([👤 Guest])
+    Employee([👤 Employee])
+    Employer([👤 Employer])
+    Admin([👤 Administrator])
+
+    Guest --> UC1[Register]
+    Guest --> UC2[Login]
+
+    Employee --> UC3[Create Resume]
+    Employee --> UC4[View / Edit / Delete Own Resumes]
+    Employee --> UC5[Search Vacancies by Skills]
+    Employee --> UC6[Apply to Vacancy]
+    Employee --> UC7[View Own Applications]
+
+    Employer --> UC8[Create Vacancy]
+    Employer --> UC9[View / Edit / Delete Own Vacancies]
+    Employer --> UC10[Propose to Resume]
+    Employer --> UC11[View Applications to Own Vacancies]
+    Employer --> UC12[Find Matching Resumes]
+
+    Admin --> UC3
+    Admin --> UC4
+    Admin --> UC8
+    Admin --> UC9
+    Admin --> UC13[View All Users]
+    Admin --> UC14[View All Resumes and Vacancies]
+```
+
+Class Diagram
+```mermaid
+classDiagram
+    direction TB
+
+    class IUnitOfWork {
+        <<interface>>
+        +Users IUserRepository
+        +Resumes IResumeRepository
+        +Vacancies IVacancyRepository
+        +Applications IApplicationRepository
+        +SaveChangesAsync() Task~int~
+    }
+
+    class IRepository~T~ {
+        <<interface>>
+        +GetByIdAsync(id) Task~T~
+        +GetAllAsync() Task~IEnumerable~T~~
+        +AddAsync(entity) Task
+        +Update(entity) void
+        +Delete(entity) void
+    }
+
+    class IApplicationRepository {
+        <<interface>>
+        +ExistsAsync(resumeId, vacancyId) Task~bool~
+        +GetByResumeIdAsync(resumeId) Task~IEnumerable~Application~~
+        +GetByVacancyIdAsync(vacancyId) Task~IEnumerable~Application~~
+    }
+
+    class IVacancyRepository {
+        <<interface>>
+        +GetAllWithUserAsync() Task~IEnumerable~Vacancy~~
+        +GetByIdWithDetailsAsync(id) Task~Vacancy~
+    }
+
+    class IUserRepository {
+        <<interface>>
+        +GetByEmailAsync(email) Task~User~
+        +GetByIdWithRoleAsync(id) Task~User~
+    }
+
+    class IResumeRepository {
+        <<interface>>
+        +GetByUserIdAsync(userId) Task~IEnumerable~Resume~~
+        +GetByIdWithDetailsAsync(id) Task~Resume~
+        +GetByKeywordAsync(keyword) Task~IEnumerable~Resume~~
+    }
+
+    IRepository~T~ <|-- IApplicationRepository
+    IRepository~T~ <|-- IVacancyRepository
+    IRepository~T~ <|-- IUserRepository
+    IRepository~T~ <|-- IResumeRepository
+
+    IUnitOfWork --> IUserRepository
+    IUnitOfWork --> IResumeRepository
+    IUnitOfWork --> IVacancyRepository
+    IUnitOfWork --> IApplicationRepository
+
+    class ApplicationService {
+        -_uow IUnitOfWork
+        +ApplyAsync(dto) Task~OperationResult~ApplicationDto~~
+        +ProposeAsync(dto) Task~OperationResult~ApplicationDto~~
+        +GetByResumeIdAsync(resumeId, userId) Task~IEnumerable~ApplicationDto~~
+        +GetByVacancyIdAsync(vacancyId, userId) Task~IEnumerable~ApplicationDto~~
+        -ValidateOwnership(resume, userId) void
+        -CheckDuplicate(resumeId, vacancyId) Task
+    }
+
+    class VacancyService {
+        -_uow IUnitOfWork
+        +CreateAsync(dto) Task~OperationResult~VacancyDto~~
+        +UpdateAsync(id, dto, userId) Task~OperationResult~VacancyDto~~
+        +DeleteAsync(id, userId) Task~OperationResult~bool~~
+        +GetAllAsync(filter) Task~IEnumerable~VacancyDto~~
+        +GetByIdAsync(id) Task~VacancyDto~
+    }
+
+    class ApplicationsController {
+        -_applicationService IApplicationService
+        +Apply(request) Task~IActionResult~
+        +Propose(request) Task~IActionResult~
+        +GetByResume(resumeId) Task~IActionResult~
+        +GetByVacancy(vacancyId) Task~IActionResult~
+    }
+
+    class VacanciesController {
+        -_vacancyService IVacancyService
+        +GetAll(filter) Task~IActionResult~
+        +GetById(id) Task~IActionResult~
+        +Create(request) Task~IActionResult~
+        +Update(id, request) Task~IActionResult~
+        +Delete(id) Task~IActionResult~
+    }
+
+    class Application {
+        +Id int
+        +ResumeId int
+        +VacancyId int
+        +Type ApplicationType
+        +Status ApplicationStatus
+        +CreatedAt DateTime
+        +Resume Resume
+        +Vacancy Vacancy
+    }
+
+    class Vacancy {
+        +Id int
+        +Title string
+        +Description string
+        +RequiredSkills string
+        +SalaryFrom decimal
+        +SalaryTo decimal
+        +CreatedAt DateTime
+        +EmployerId int
+        +Employer User
+        +Applications ICollection~Application~
+    }
+
+    class Resume {
+        +Id int
+        +Title string
+        +Description string
+        +Skills string
+        +ExpectedSalary decimal
+        +CreatedAt DateTime
+        +UserId int
+        +User User
+        +Applications ICollection~Application~
+    }
+
+    class User {
+        +Id int
+        +FirstName string
+        +LastName string
+        +Email string
+        +PasswordHash string
+        +RoleId int
+        +Role Role
+    }
+
+    ApplicationsController --> ApplicationService
+    VacanciesController --> VacancyService
+    ApplicationService --> IUnitOfWork
+    VacancyService --> IUnitOfWork
+    Application --> Resume
+    Application --> Vacancy
+    Vacancy --> User
+    Resume --> User
+```
+
+Sequence Diagram
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant MW as ExceptionHandlingMiddleware
+    participant Auth as JWT Middleware
+    participant Ctrl as ApplicationsController
+    participant Svc as ApplicationService (BLL)
+    participant UoW as UnitOfWork (DAL)
+    participant DB as SQLite / SQL Server
+
+    C->>MW: POST /api/applications/apply<br/>Bearer JWT + ApplyRequest body
+    MW->>Auth: next()
+    Auth->>Auth: Validate JWT signature, expiry, issuer, audience
+    Auth->>Ctrl: HttpContext.User populated
+
+    Ctrl->>Ctrl: Extract UserId from Claims
+    Ctrl->>Ctrl: Map ApplyRequest to ApplyDto
+    Ctrl->>Svc: ApplyAsync(applyDto)
+
+    Svc->>UoW: Resumes.GetByIdAsync(resumeId)
+    UoW->>DB: SELECT FROM Resumes WHERE Id = resumeId
+    DB-->>UoW: Resume entity or null
+    UoW-->>Svc: Resume
+
+    alt Resume not found
+        Svc-->>MW: throw EntityNotFoundException
+        MW-->>C: 404 Not Found
+    end
+
+    Svc->>Svc: Check resume.UserId == dto.ApplicantUserId
+    alt Ownership violation
+        Svc-->>MW: throw AuthorizationException
+        MW-->>C: 403 Forbidden
+    end
+
+    Svc->>UoW: Vacancies.GetByIdAsync(vacancyId)
+    UoW->>DB: SELECT FROM Vacancies WHERE Id = vacancyId
+    DB-->>UoW: Vacancy entity or null
+    UoW-->>Svc: Vacancy
+
+    alt Vacancy not found
+        Svc-->>MW: throw EntityNotFoundException
+        MW-->>C: 404 Not Found
+    end
+
+    Svc->>UoW: Applications.ExistsAsync(resumeId, vacancyId)
+    UoW->>DB: SELECT COUNT FROM Applications WHERE ResumeId AND VacancyId
+    DB-->>UoW: count
+    UoW-->>Svc: bool
+
+    alt Duplicate application
+        Svc-->>MW: throw DuplicateEntityException
+        MW-->>C: 409 Conflict
+    end
+
+    Svc->>Svc: Create Application entity Type=Apply Status=Pending
+    Svc->>UoW: Applications.AddAsync(application)
+    Svc->>UoW: SaveChangesAsync()
+    UoW->>DB: INSERT INTO Applications
+    DB-->>UoW: 1 row affected
+    UoW-->>Svc: saved entity with Id
+
+    Svc->>Svc: Map Application to ApplicationDto
+    Svc-->>Ctrl: OperationResult.Success(applicationDto)
+
+    Ctrl->>Ctrl: Map ApplicationDto to ApplicationViewModel
+    Ctrl-->>MW: 200 OK + ApplicationViewModel
+    MW-->>C: HTTP 200 OK
+```
